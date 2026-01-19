@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -11,8 +12,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/kms/kmsiface"
 )
 
+var (
+	kmsClientCache   = make(map[string]kmsiface.KMSAPI)
+	kmsClientCacheMu sync.RWMutex
+)
+
 func decryptPrivateKeyWithKMS(privateKeyEnc, awsRegion string) (key string, err error) {
-	kmsSvc := newKmsClient(awsRegion)
+	kmsSvc := getKmsClient(awsRegion)
 
 	encryptedValue, err := base64.StdEncoding.DecodeString(privateKeyEnc)
 
@@ -27,7 +33,7 @@ func decryptPrivateKeyWithKMS(privateKeyEnc, awsRegion string) (key string, err 
 }
 
 func encryptPrivateKeyWithKMS(privateKey, kmsKeyID, awsRegion string) (key string, err error) {
-	kmsSvc := newKmsClient(awsRegion)
+	kmsSvc := getKmsClient(awsRegion)
 	params := &kms.EncryptInput{
 		KeyId:     &kmsKeyID,
 		Plaintext: []byte(privateKey),
@@ -39,6 +45,29 @@ func encryptPrivateKeyWithKMS(privateKey, kmsKeyID, awsRegion string) (key strin
 
 	encodedPrivKey := base64.StdEncoding.EncodeToString(resp.CiphertextBlob)
 	return encodedPrivKey, nil
+}
+
+func getKmsClient(awsRegion string) kmsiface.KMSAPI {
+	cacheKey := awsRegion + "|" + os.Getenv("FAKE_AWSKMS_URL")
+
+	kmsClientCacheMu.RLock()
+	if client, ok := kmsClientCache[cacheKey]; ok {
+		kmsClientCacheMu.RUnlock()
+		return client
+	}
+	kmsClientCacheMu.RUnlock()
+
+	kmsClientCacheMu.Lock()
+	defer kmsClientCacheMu.Unlock()
+
+	// Double-check after acquiring write lock
+	if client, ok := kmsClientCache[cacheKey]; ok {
+		return client
+	}
+
+	client := newKmsClient(awsRegion)
+	kmsClientCache[cacheKey] = client
+	return client
 }
 
 func newKmsClient(awsRegion string) kmsiface.KMSAPI {
