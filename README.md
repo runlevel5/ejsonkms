@@ -36,6 +36,9 @@ $ cat secrets.ejson
 }
 ```
 
+> [!NOTE]
+> If either of the `AWS_REGION` or `AWS_DEFAULT_REGION` environment variables is set, it will be used implicitly for `--aws-region` when the flag is not provided.
+
 Encrypting:
 
 ```
