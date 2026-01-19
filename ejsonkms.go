@@ -3,7 +3,7 @@ package ejsonkms
 import (
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/Shopify/ejson"
@@ -69,7 +69,7 @@ func findPrivateKeyEnc(ejsonFilePath string) (key string, err error) {
 	}
 	defer file.Close()
 
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return "", err
 	}
